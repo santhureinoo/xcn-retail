@@ -1,13 +1,94 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-background: #F9FAFB;
+    --color-surface: #FFFFFF;
+  }
+
+  .dark {
+    --color-background: #1F2937;
+    --color-surface: #374151;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Page Transition Animations */
+.page-transition {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  will-change: transform, opacity;
+}
+
+/* Fade transitions */
+.fade-in {
+  animation: fadeIn 0.3s forwards;
+}
+
+.fade-out {
+  animation: fadeOut 0.3s forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Slide transitions */
+.slide-in-right {
+  animation: slideInRight 0.3s forwards;
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.3s forwards;
+}
+
+.slide-out-right {
+  animation: slideOutRight 0.3s forwards;
+}
+
+.slide-out-left {
+  animation: slideOutLeft 0.3s forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }

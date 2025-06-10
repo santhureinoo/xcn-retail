@@ -1,0 +1,114 @@
+{
+  "appName": "Currency Platform",
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "back": "Back"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "resetPassword": "Reset Password",
+    "dontHaveAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
+    "signUp": "Sign Up",
+    "signIn": "Sign In",
+    "signedInAs": "Signed in as"
+  },
+  "navigation": {
+    "home": "Home",
+    "transactions": "Transactions",
+    "settings": "Settings",
+    "profile": "Profile"
+  },
+  "guestHome": {
+    "hero": {
+      "title": "Your One-Stop Shop for Gaming & Social Media Assets",
+      "subtitle": "Buy and sell game accounts, in-game currency, and social media accounts securely and hassle-free.",
+      "getStarted": "Get Started",
+      "signIn": "Sign In"
+    },
+    "services": {
+      "title": "Our Premium Services",
+      "socialMedia": {
+        "title": "Social Media Accounts",
+        "description": "Premium TikTok, Facebook, and Instagram accounts with established followers and engagement. Perfect for influencers and businesses.",
+        "features": {
+          "verified": "Verified accounts available",
+          "followers": "Various follower counts",
+          "secure": "Secure transfer process"
+        },
+        "cta": "Browse Accounts"
+      },
+      "mlDiamonds": {
+        "title": "Mobile Legends Diamonds",
+        "description": "Get Mobile Legends diamonds at the best prices. Instant delivery to power up your gaming experience.",
+        "features": {
+          "cheaper": "Up to 30% cheaper than in-game",
+          "instant": "Instant delivery",
+          "secure": "100% secure transactions"
+        },
+        "cta": "Buy Diamonds"
+      },
+      "mlAccounts": {
+        "title": "Mobile Legends Accounts",
+        "description": "Premium Mobile Legends accounts with rare skins, high ranks, and complete hero collections.",
+        "features": {
+          "mythical": "Mythical Glory accounts",
+          "skins": "Rare & limited skins",
+          "ownership": "Full ownership transfer"
+        },
+        "cta": "Shop Accounts"
+      }
+    },
+    "promotions": {
+      "title": "Special Promotions",
+      "claimOffer": "Claim Offer",
+      "items": {
+        "offer1": {
+          "title": "Limited Time Offer",
+          "description": "Get 50% extra diamonds on your first purchase!"
+        },
+        "offer2": {
+          "title": "Premium Account Bundle",
+          "description": "Buy any Mythic ML account and get free diamonds!"
+        },
+        "offer3": {
+          "title": "Refer & Earn",
+          "description": "Invite friends and earn up to $50 in store credit"
+        }
+      }
+    },
+    "testimonials": {
+      "title": "What Our Customers Say"
+    }
+  },
+  "userHome": {
+    "title": "In-Game Currency Dashboard",
+    "balance": {
+      "title": "Balance",
+      "available": "Available Credits"
+    },
+    "transactions": {
+      "title": "Recent Transactions",
+      "purchase": "Purchase",
+      "reward": "Reward"
+    },
+    "actions": {
+      "title": "Quick Actions",
+      "add": "Add Credits",
+      "transfer": "Transfer Credits"
+    }
+  }
+}

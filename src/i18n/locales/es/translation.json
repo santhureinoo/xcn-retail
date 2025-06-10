@@ -1,0 +1,12 @@
+{
+  "appName": "Plataforma de Moneda",
+  "signedInAs": "Conectado como",
+  "profile": "Perfil",
+  "settings": "Configuración",
+  "logout": "Cerrar sesión",
+  "home": "Inicio",
+  "transactions": "Transacciones",
+  "darkMode": "Modo oscuro",
+  "lightMode": "Modo claro",
+  "language": "Idioma"
+}

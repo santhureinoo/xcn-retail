@@ -1,0 +1,12 @@
+{
+  "appName": "Currency Platform",
+  "signedInAs": "Signed in as",
+  "profile": "Profile",
+  "settings": "Settings",
+  "logout": "Logout",
+  "home": "Home",
+  "transactions": "Transactions",
+  "darkMode": "Dark Mode",
+  "lightMode": "Light Mode",
+  "language": "Language"
+}
