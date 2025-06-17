@@ -1,7 +1,7 @@
 import axios from 'axios';
 import authService from './authService';
 
-const API_URL = 'https://9b8a-2a09-bac5-56ba-18be-00-277-94.ngrok-free.app';
+const API_URL = 'https://bd47-2a09-bac5-56bf-25b9-00-3c2-32.ngrok-free.app';
 
 const axiosInstance = axios.create({
   baseURL: API_URL,

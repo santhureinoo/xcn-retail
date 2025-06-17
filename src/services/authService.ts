@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Define the base API URL
-const BASE_API_URL = 'https://9b8a-2a09-bac5-56ba-18be-00-277-94.ngrok-free.app';
+const BASE_API_URL = 'https://bd47-2a09-bac5-56bf-25b9-00-3c2-32.ngrok-free.app';
 
 // Define types for the auth responses
 export interface User {
