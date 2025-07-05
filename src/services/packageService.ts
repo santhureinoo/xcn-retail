@@ -15,6 +15,7 @@ export interface Package {
   region: string;
   gameName: string;
   vendor: string;
+  appliedMarkup?: MarkUp;
   vendorPackageCode: string;
   vendorPrice: number;
   currency: string;
@@ -23,6 +24,15 @@ export interface Package {
   resellKeyword?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MarkUp {
+  id: string;
+  description?: string;
+  flatAmountAdd?: number;
+  percentageAdd?: number;
+  isActive: boolean;
+  name: string;
 }
 
 export interface Game {
@@ -193,7 +203,18 @@ export class PackageService {
   static async getPackagesByGame(gameName: string): Promise<Package[]> {
     try {
       const response = await axiosInstance.get(`/packages?gameName=${encodeURIComponent(gameName)}&limit=1000`);
-      return response.data.packages || [];
+      const packages: Package[] = (response.data.packages as Package[]).map((pkg: Package) => {
+        if(pkg.appliedMarkup) {
+          if(pkg.appliedMarkup.flatAmountAdd) {
+            pkg.price = pkg.price + pkg.appliedMarkup.flatAmountAdd;
+          }
+          if(pkg.appliedMarkup.percentageAdd) {
+            pkg.price = pkg.price + (pkg.price * pkg.appliedMarkup.percentageAdd / 100);
+          }
+        }
+        return pkg;
+      });
+      return packages;
     } catch (error: any) {
       console.error('Failed to fetch packages for game:', error);
       throw new Error(error.response?.data?.message || 'Failed to fetch packages for game');
