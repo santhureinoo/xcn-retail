@@ -444,7 +444,7 @@ Orders to process: ${orderLines.length}`;
                 // Show dual pricing for resellers on Smile packages
                 if (pkg.vendor === 'Smile') {
                   response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
-                  response += `   💰Reseller: ${pkg.baseVendorCost || 0} Smile Coins\n`;
+                  response += `   💰Reseller: ${pkg.vendorPrice || 0} Smile Coins\n`;
                 } else {
                   response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
                 }
@@ -458,7 +458,7 @@ Orders to process: ${orderLines.length}`;
                   // Show dual pricing for resellers on Smile packages
                   if (pkg.vendor === 'Smile') {
                     response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
-                    response += `   💰 Regular: ${pkg.price} XCN | 🎯 Reseller: ${pkg.baseVendorCost || 0} Smile Coins\n`;
+                    response += `   💰Reseller: ${pkg.vendorPrice || 0} Smile Coins\n`;
                   } else {
                     response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
                   }
