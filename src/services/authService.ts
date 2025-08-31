@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Define the base API URL
-const BASE_API_URL ='https://f3d0-2a09-bac5-56b8-25af-00-3c1-22.ngrok-free.app';
+const BASE_API_URL ='https://digital-asset-be-835786625763.us-central1.run.app';
 
 // Define types for the auth responses
 export interface User {

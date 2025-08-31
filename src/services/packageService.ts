@@ -18,6 +18,7 @@ export interface Package {
   appliedMarkup?: MarkUp;
   vendorPackageCode: string;
   vendorPrice: number;
+  baseVendorCost: number;
   currency: string;
   status: string;
   stock: number;
@@ -223,12 +224,11 @@ export class PackageService {
 
   // MISSING METHODS THAT HOMEPAGE NEEDS:
 
-  // Get regions for a specific game
+  // Get regions for a specific game using the new endpoint
   static async getRegionsForGame(gameName: string): Promise<string[]> {
     try {
-      const packages = await this.getPackagesByGame(gameName);
-      const regions = Array.from(new Set(packages.map(pkg => pkg.region).filter(region => region)));
-      return regions.sort();
+      const response = await axiosInstance.get(`/packages/regions/${encodeURIComponent(gameName)}`);
+      return response.data.regions || [];
     } catch (error: any) {
       console.error('Error fetching regions for game:', error);
       return [];
@@ -244,17 +244,17 @@ export class PackageService {
   }
 
   // Search multiple packages by codes
-  static async searchMultiplePackagesByCodes(packageCodes: string[], gameName: string): Promise<{
+  static async searchMultiplePackagesByCodes(packageCodes: string[], gameName: string, preFilteredPackages?: Package[]): Promise<{
     found: Package[];
     notFound: string[];
   }> {
     try {
-      const packages = await this.getPackagesByGame(gameName);
+      const packages = preFilteredPackages || await this.getPackagesByGame(gameName);
       const found: Package[] = [];
       const notFound: string[] = [];
 
       packageCodes.forEach(code => {
-        const foundPackage = packages.find(pkg => 
+        const foundPackage = packages.find(pkg =>
           pkg.resellKeyword && pkg.resellKeyword === code
         );
         
@@ -286,6 +286,36 @@ export class PackageService {
   // Calculate total price of packages
   static calculateTotalPrice(packages: Package[]): number {
     return packages.reduce((total, pkg) => total + pkg.price, 0);
+  }
+
+  // Get package price based on user role and vendor
+  static getEffectivePrice(pkg: Package, userRole: string): number {
+    if (userRole === 'RESELLER' && pkg.vendor === 'Smile') {
+      return pkg.baseVendorCost || 0;
+    }
+    return pkg.price;
+  }
+
+  // Check if special pricing applies
+  static isSpecialPricing(pkg: Package, userRole: string): boolean {
+    return userRole === 'RESELLER' && pkg.vendor === 'Smile';
+  }
+
+  // Format pricing display for resellers
+  static formatPricingDisplay(pkg: Package, userRole: string): {
+    price: number;
+    originalPrice?: number;
+    isSpecialPricing: boolean;
+    currency: string;
+  } {
+    const isSpecial = this.isSpecialPricing(pkg, userRole);
+    
+    return {
+      price: this.getEffectivePrice(pkg, userRole),
+      originalPrice: isSpecial ? pkg.price : undefined,
+      isSpecialPricing: isSpecial,
+      currency: isSpecial ? 'Smile Coins' : 'XCN'
+    };
   }
 
   // Create multi-package order
@@ -522,6 +552,17 @@ export class PackageService {
     } catch (error: any) {
       console.error('Failed to fetch user balance:', error);
       throw new Error(error.response?.data?.message || 'Failed to fetch user balance');
+    }
+  }
+
+  // Get smile coin balance by region
+  static async getSmileCoinBalanceByRegion(region: string): Promise<number> {
+    try {
+      const response = await axiosInstance.get(`/transactions/smile-balance/${encodeURIComponent(region)}`);
+      return response.data.balance || 0;
+    } catch (error: any) {
+      console.error('Failed to fetch smile coin balance for region:', error);
+      return 0;
     }
   }
 

@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useLocation } from 'react-router-dom';
 import packageService, { Game } from '../services/packageService';
 import { useBalance } from '../hooks/useBalance';
+import axiosInstance from '../services/axiosConfig';
 
 // Message types
 type MessageType = 'incoming' | 'outgoing' | 'system';
@@ -35,27 +36,26 @@ export interface MultiPackageOrderData {
 const HomePage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
-  const { balance, refetch: refreshBalance } = useBalance();
   
   // Debug the location state
   console.log('HomePage location state:', location.state);
   
   // Get game info from route state if available
-  const routeState = location.state as { 
-    selectedGame?: Game, 
-    preMessage?: string 
+  const routeState = location.state as {
+    selectedGame?: Game,
+    preMessage?: string
   } | null;
   
   const selectedGame = routeState?.selectedGame;
   const preMessage = routeState?.preMessage;
   
-  console.log('Selected game:', selectedGame);
-  console.log('Pre message:', preMessage);
-  
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const { balance, smileCoinBalance, loading, error, refetch: refreshBalance, fetchSmileCoinBalanceByRegion } = useBalance(selectedRegion);
+  const [regionSmileCoinBalance, setRegionSmileCoinBalance] = useState<number>(0);
   const [availablePackages, setAvailablePackages] = useState<{code: string, name: string, price: number}[]>([]);
   const [currentBalance, setCurrentBalance] = useState(balance);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -91,10 +91,38 @@ const HomePage: React.FC = () => {
     }
   }, [selectedGame]);
 
+  // Refresh smile coin balance when region changes
+  useEffect(() => {
+    // Debounce the API call to prevent excessive calls
+    const debounceTimer = setTimeout(async () => {
+      if (selectedRegion && selectedRegion.trim() !== '') {
+        try {
+          // Fetch the smile coin balance for the selected region using the hook function
+          const regionBalance = await fetchSmileCoinBalanceByRegion(selectedRegion);
+          setRegionSmileCoinBalance(regionBalance);
+        } catch (error) {
+          console.error('Failed to fetch smile coin balance for region:', error);
+          setRegionSmileCoinBalance(0);
+        }
+      }
+    }, 300); // 300ms debounce
+    
+    // Clear the timeout if the effect is re-run before the delay
+    return () => clearTimeout(debounceTimer);
+  }, [selectedRegion, fetchSmileCoinBalanceByRegion]); // Depend on selectedRegion and fetchSmileCoinBalanceByRegion
+
   const loadGameData = async (gameName: string) => {
     try {
       const regions = await packageService.getRegionsForGame(gameName);
       setAvailableRegions(regions);
+      // Only set the first region as default if available and no region is already selected
+      // and if the available regions don't already include the selected region
+      if (regions.length > 0 && (!selectedRegion || !regions.includes(selectedRegion))) {
+        // Only set the region if it's different from the current one to avoid unnecessary re-renders
+        if (selectedRegion !== regions[0]) {
+          setSelectedRegion(regions[0]);
+        }
+      }
       console.log('Loaded regions for', gameName, ':', regions);
     } catch (error) {
       console.error('Failed to load game data:', error);
@@ -208,7 +236,20 @@ const HomePage: React.FC = () => {
           }
 
           // Search for packages
-          const { found: foundPackages, notFound: notFoundCodes } = await packageService.searchMultiplePackagesByCodes(packageCodes, gameName);
+          // Get all packages for the game first
+          const allPackages = await packageService.getPackagesByGame(gameName);
+          
+          // Filter by region if selected
+          const regionFilteredPackages = selectedRegion
+            ? allPackages.filter(pkg => pkg.region === selectedRegion)
+            : allPackages;
+          
+          // Search for packages within the filtered list
+          const { found: foundPackages, notFound: notFoundCodes } = await packageService.searchMultiplePackagesByCodes(
+            packageCodes,
+            gameName,
+            regionFilteredPackages
+          );
 
           if (notFoundCodes.length > 0) {
             return `❌ Some packages not found for ${gameName} in order: "${orderLine}"
@@ -217,7 +258,10 @@ const HomePage: React.FC = () => {
 ${foundPackages.length > 0 ? `✅ Found: ${foundPackages.map(p => p.vendorPackageCode).join(', ')}` : ''}`;
           }
 
-          const orderCost = packageService.calculateTotalPrice(foundPackages);
+          // Calculate cost using effective pricing for resellers
+          const orderCost = foundPackages.reduce((total, pkg) => {
+            return total + packageService.getEffectivePrice(pkg, (user as any)?.role || 'RETAILER');
+          }, 0);
           totalCost += orderCost;
           
           allOrderResults.push({
@@ -322,7 +366,12 @@ Orders to process: ${orderLines.length}`;
             response += `👤 Player: ${order.playerId} | ${order.identifier}\n`;
             response += `📦 Packages (${order.packages.length}):\n`;
             order.packages.forEach(pkg => {
-              response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${pkg.price} XCN)\n`;
+              const pricingInfo = packageService.formatPricingDisplay(pkg, (user as any)?.role || 'RETAILER');
+              if (pricingInfo.isSpecialPricing) {
+                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${pricingInfo.price} ${pricingInfo.currency})\n`;
+              } else {
+                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${pricingInfo.price} XCN)\n`;
+              }
             });
             response += `💰 Cost: ${order.cost} XCN\n`;
             response += `🆔 Order ID: ${order.orderId}\n\n`;
@@ -370,9 +419,14 @@ Orders to process: ${orderLines.length}`;
         try {
           const packages = await packageService.getPackagesByGame(selectedGame.name);
           
-          if (packages.length > 0) {
+          // Filter packages by selected region if one is selected
+          const filteredPackages = selectedRegion
+            ? packages.filter(pkg => pkg.region === selectedRegion)
+            : packages;
+          
+          if (filteredPackages.length > 0) {
             // Group by region/identifier if available
-            const packagesByRegion = packages.reduce((acc: any, pkg: any) => {
+            const packagesByRegion = filteredPackages.reduce((acc: any, pkg: any) => {
               const region = pkg.region || 'General';
               if (!acc[region]) acc[region] = [];
               acc[region].push(pkg);
@@ -381,16 +435,41 @@ Orders to process: ${orderLines.length}`;
             
             let response = `Available packages for ${selectedGame.name}:\n\n`;
             
-            Object.entries(packagesByRegion).forEach(([region, pkgs]: [string, any]) => {
-              response += `📍 ${region}:\n`;
-              pkgs.slice(0, 5).forEach((pkg: any) => { // Show max 5 per region
+            // If a specific region is selected, only show packages for that region
+            if (selectedRegion) {
+              const regionPackages = packagesByRegion[selectedRegion] || [];
+              response += `📍 ${selectedRegion}:\n`;
+              regionPackages.slice(0, 10).forEach((pkg: any) => { // Show max 10 packages
                 const stockStatus = pkg.stock > 0 ? '✅' : '❌';
-                response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
+                // Show dual pricing for resellers on Smile packages
+                if (pkg.vendor === 'Smile') {
+                  response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
+                  response += `   💰Reseller: ${pkg.baseVendorCost || 0} Smile Coins\n`;
+                } else {
+                  response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
+                }
               });
-              response += '\n';
-            });
+            } else {
+              // Show packages grouped by region
+              Object.entries(packagesByRegion).forEach(([region, pkgs]: [string, any]) => {
+                response += `📍 ${region}:\n`;
+                pkgs.slice(0, 5).forEach((pkg: any) => { // Show max 5 per region
+                  const stockStatus = pkg.stock > 0 ? '✅' : '❌';
+                  // Show dual pricing for resellers on Smile packages
+                  if (pkg.vendor === 'Smile') {
+                    response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
+                    response += `   💰 Regular: ${pkg.price} XCN | 🎯 Reseller: ${pkg.baseVendorCost || 0} Smile Coins\n`;
+                  } else {
+                    response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
+                  }
+                });
+                response += '\n';
+              });
+            }
             
-            response += `💰 Your balance: ${currentBalance} XCN\n\n`;
+            response += `💰 Your balances:\n`;
+            response += `   • XCN: ${currentBalance}\n`;
+            response += `   • Smile Coins: ${regionSmileCoinBalance || smileCoinBalance}\n\n`;
             response += 'Use format: "PLAYER_ID IDENTIFIER PACKAGE_CODE"\n';
             response += 'Example: "1234566 12345 ML_86"';
             return response;
@@ -506,6 +585,9 @@ You can also ask me about:
 
 What would you like to do? 🎮`;
     }
+
+    // Fallback return
+    return "I'm not sure how to help with that. Please try asking about packages, balance, or placing an order.";
   };
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -519,7 +601,7 @@ What would you like to do? 🎮`;
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center space-x-4">
               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -531,18 +613,42 @@ What would you like to do? 🎮`;
                   Gaming Assistant
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {selectedGame ? `${selectedGame.name} • ` : ''}Balance: {currentBalance} XCN
+                  {selectedGame ? `${selectedGame.name} • ` : ''}
+                  {`XCN: ${currentBalance} | Smile: ${regionSmileCoinBalance || smileCoinBalance}`
+                  }
                 </p>
               </div>
             </div>
             
             {/* Game Selection Indicator */}
             {selectedGame && (
-              <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
-                <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${selectedGame.gradient}`}></div>
-                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                  {selectedGame.name}
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
+                <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-90/30 px-3 py-2 rounded-lg">
+                  <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${selectedGame.gradient}`}></div>
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    {selectedGame.name}
+                  </span>
+                </div>
+                
+                {/* Region Selector */}
+                {availableRegions.length > 0 && (
+                  <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Region:
+                    </label>
+                    <select
+                      value={selectedRegion}
+                      onChange={(e) => setSelectedRegion(e.target.value)}
+                      className="bg-white dark:bg-gray-600 text-gray-900 dark:text-white text-sm rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {availableRegions.map((region) => (
+                        <option key={region} value={region}>
+                          {region}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </div>
