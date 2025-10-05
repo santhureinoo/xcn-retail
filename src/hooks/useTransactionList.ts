@@ -3,7 +3,7 @@ import transactionService from '../services/transactionService';
 import { CurrencyTransaction, PackageTransaction } from '../types/transaction';
 
 interface UseTransactionListProps {
-  type: 'currency' | 'package';
+  type: 'currency' | 'package' | 'smile';
   limit?: number;
 }
 
@@ -35,6 +35,8 @@ export function useTransactionList<T extends CurrencyTransaction | PackageTransa
         let data;
         if (type === 'currency') {
           data = await transactionService.getCurrencyTransactions(0, limit);
+        } else if (type === 'smile') {
+          data = await transactionService.getSmileCoinTransactions(0, limit);
         } else {
           data = await transactionService.getPackageTransactions(0, limit);
         }
@@ -63,6 +65,8 @@ export function useTransactionList<T extends CurrencyTransaction | PackageTransa
       let data;
       if (type === 'currency') {
         data = await transactionService.getCurrencyTransactions(nextPage, limit);
+      } else if (type === 'smile') {
+        data = await transactionService.getSmileCoinTransactions(nextPage, limit);
       } else {
         data = await transactionService.getPackageTransactions(nextPage, limit);
       }

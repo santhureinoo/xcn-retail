@@ -20,53 +20,62 @@ import TransactionDetailPage from './pages/TransactionDetailPage';
 import PackageOrderPage from './pages/PackageOrderPage';
 import HomePage from './pages/HomePage';
 
+// Import the new TransactionDetailsPage
+import TransactionDetailsPage from './pages/TransactionDetailsPage';
+
 // Protected route component for authenticated users
 const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  // If still loading auth state, show a loading indicator or nothing
+  if (loading) {
+    return <div>Loading...</div>; // Or some loading component
+  }
+  
+  return isAuthenticated ? element : <Navigate to="/login" replace />;
+};
+
+// Special protected route that redirects to home when on /chat route
+const ChatRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
+  const { isAuthenticated, loading } = useAuth();
+  
+  // If still loading auth state, show a loading indicator or nothing
+  if (loading) {
+    return <div>Loading...</div>; // Or some loading component
+  }
+  
+  
+  // Otherwise, if authenticated, render the element; if not, redirect to login
   return isAuthenticated ? element : <Navigate to="/login" replace />;
 };
 
 // Guest route component for non-authenticated users
 const GuestRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  // If still loading auth state, show a loading indicator or nothing
+ if (loading) {
+    return <div>Loading...</div>; // Or some loading component
+  }
+  
   return isAuthenticated ? <Navigate to="/home" replace /> : element;
 };
-
-// Back button handler component - must be inside Router
-function BackButtonHandler() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    const handleBackButton = () => {
-      // If we're on the login page, exit the app
-      if (location.pathname === '/' || location.pathname === '/login') {
-        CapApp.exitApp();
-      } else {
-        // Otherwise, navigate back in the app
-        navigate(-1);
-      }
-    };
-
-    const backButtonListener = CapApp.addListener('backButton', handleBackButton);
-
-    return () => {
-      backButtonListener.then(listener => listener.remove());
-    };
-  }, [navigate, location.pathname]);
-
-  return null; // This component doesn't render anything
-}
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
 
   return (
     <Router>
-      <BackButtonHandler /> {/* Add this inside Router */}
       <Routes>
         {/* Guest routes - redirect to home if logged in */}
         <Route path="/" element={
+          <GuestRoute element={
+            <PageTransition>
+              <LoginPage />
+            </PageTransition>
+          } />
+        } />
+        <Route path="/login" element={
           <GuestRoute element={
             <PageTransition>
               <LoginPage />
@@ -120,9 +129,9 @@ function AppRoutes() {
           } />
         } />
 
-        {/* Package Order Page */}
+        {/* Package Order Page - redirect to home on refresh only for this route */}
         <Route path="/chat" element={
-          <ProtectedRoute element={
+          <ChatRoute element={
             <Layout>
               <PageTransition>
                 <HomePage />
@@ -150,6 +159,15 @@ function AppRoutes() {
             </Layout>
           } />
         } /> */}
+        <Route path="/transaction-details/:id" element={
+          <ProtectedRoute element={
+            <Layout>
+              <PageTransition>
+                <TransactionDetailsPage />
+              </PageTransition>
+            </Layout>
+          } />
+        } />
         <Route path="/transactions/:transactionId" element={
           <ProtectedRoute element={
             <Layout>
@@ -171,9 +189,9 @@ function AppRoutes() {
           } />
         } />
 
-        {/* Fallback route - redirect to home or guest home */}
+        {/* Fallback route - redirect to home or login based on auth status */}
         <Route path="*" element={
-          isAuthenticated ? <Navigate to="/home" replace /> : <Navigate to="/" replace />
+          isAuthenticated ? <Navigate to="/chat" replace /> : <Navigate to="/login" replace />
         } />
       </Routes>
     </Router>

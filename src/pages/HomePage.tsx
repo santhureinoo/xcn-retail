@@ -3,7 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useLocation } from 'react-router-dom';
 import packageService, { Game } from '../services/packageService';
 import { useBalance } from '../hooks/useBalance';
-import axiosInstance from '../services/axiosConfig';
 
 // Message types
 type MessageType = 'incoming' | 'outgoing' | 'system';
@@ -36,27 +35,24 @@ export interface MultiPackageOrderData {
 const HomePage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
-  
-  // Debug the location state
-  console.log('HomePage location state:', location.state);
-  
+
   // Get game info from route state if available
   const routeState = location.state as {
     selectedGame?: Game,
     preMessage?: string
   } | null;
-  
+
   const selectedGame = routeState?.selectedGame;
   const preMessage = routeState?.preMessage;
-  
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('');
-  const { balance, smileCoinBalance, loading, error, refetch: refreshBalance, fetchSmileCoinBalanceByRegion } = useBalance(selectedRegion);
+  const { balance, smileCoinBalance, loading, error, refetch: refreshBalance, fetchSmileCoinBalanceByRegion } = useBalance(selectedRegion, 'both');
   const [regionSmileCoinBalance, setRegionSmileCoinBalance] = useState<number>(0);
-  const [availablePackages, setAvailablePackages] = useState<{code: string, name: string, price: number}[]>([]);
+  const [availablePackages, setAvailablePackages] = useState<{ code: string, name: string, price: number }[]>([]);
   const [currentBalance, setCurrentBalance] = useState(balance);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -69,15 +65,15 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     const welcomeMessage: Message = {
       id: '1',
-      content: selectedGame 
+      content: selectedGame
         ? `Welcome ${user?.firstName || 'valued customer'}! You've selected ${selectedGame.name}. Please provide your player details in this format: "PLAYER_ID IDENTIFIER PACKAGE_CODE"`
         : `Welcome ${user?.firstName || 'valued customer'}! To place an order, please enter your details in this format: "PLAYER_ID IDENTIFIER PACKAGE_CODE"`,
       type: 'incoming',
       timestamp: new Date()
     };
-    
+
     setMessages([welcomeMessage]);
-    
+
     // Set pre-message if available
     if (preMessage) {
       setInputValue(preMessage);
@@ -106,7 +102,7 @@ const HomePage: React.FC = () => {
         }
       }
     }, 300); // 300ms debounce
-    
+
     // Clear the timeout if the effect is re-run before the delay
     return () => clearTimeout(debounceTimer);
   }, [selectedRegion, fetchSmileCoinBalanceByRegion]); // Depend on selectedRegion and fetchSmileCoinBalanceByRegion
@@ -144,7 +140,7 @@ const HomePage: React.FC = () => {
         messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
       }
     }, 100);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -181,10 +177,10 @@ const HomePage: React.FC = () => {
     // Simulate API response
     setTimeout(async () => {
       setMessages(prev => prev.filter(msg => !msg.isProcessing));
-      
+
       // Generate response based on input
       const response = await generateResponse(userMessage.content, selectedGame);
-      
+
       const botMessage: Message = {
         id: (Date.now() + 2).toString(),
         content: response,
@@ -199,38 +195,38 @@ const HomePage: React.FC = () => {
 
   const generateResponse = async (userInput: string, selectedGame?: Game): Promise<string> => {
     const input = userInput.toLowerCase();
-    
+
     // Split by comma to get different orders/users
     const orderLines = userInput.trim().split(',').map(line => line.trim()).filter(line => line);
-    
+
     // Original single order pattern
     const orderPattern = /^[\w\d]+\s+[\w\d]+\s+[\w\d_+]+$/;
-    
+
     // Check if this looks like order(s)
     const isOrderInput = orderLines.every(line => orderPattern.test(line));
-    
+
     if (isOrderInput) {
       const gameName = selectedGame?.name || 'the selected game';
-      
+
       try {
         // Process each order line
         const allOrderResults = [];
         let totalCost = 0;
-        const userBalance = await packageService.getUserBalance();
         
+
         // First, validate all orders and calculate total cost
         for (const orderLine of orderLines) {
           const parts = orderLine.trim().split(/\s+/);
-          
+
           if (parts.length !== 3) {
             return `❌ Invalid format in: "${orderLine}"\nPlease use: "PLAYER_ID IDENTIFIER PACKAGE_CODE"`;
           }
 
           const [playerId, identifier, packageCodesString] = parts;
-          
+
           // Parse package codes (split by +)
           const packageCodes = packageService.parsePackageCodes(packageCodesString);
-          
+
           if (packageCodes.length === 0) {
             return `❌ No valid package codes found in: "${orderLine}"`;
           }
@@ -238,12 +234,12 @@ const HomePage: React.FC = () => {
           // Search for packages
           // Get all packages for the game first
           const allPackages = await packageService.getPackagesByGame(gameName);
-          
+
           // Filter by region if selected
           const regionFilteredPackages = selectedRegion
             ? allPackages.filter(pkg => pkg.region === selectedRegion)
             : allPackages;
-          
+
           // Search for packages within the filtered list
           const { found: foundPackages, notFound: notFoundCodes } = await packageService.searchMultiplePackagesByCodes(
             packageCodes,
@@ -252,18 +248,21 @@ const HomePage: React.FC = () => {
           );
 
           if (notFoundCodes.length > 0) {
-            return `❌ Some packages not found for ${gameName} in order: "${orderLine}"
-            
-❌ Not found: ${notFoundCodes.join(', ')}
-${foundPackages.length > 0 ? `✅ Found: ${foundPackages.map(p => p.vendorPackageCode).join(', ')}` : ''}`;
+            return `❌ Some packages not found for ${gameName} in order: "${orderLine}"      
+              ❌ Not found: ${notFoundCodes.join(', ')}
+              ${foundPackages.length > 0 ? `✅ Found: ${foundPackages.map(p => p.vendorPackageCode).join(', ')}` : ''}`;
           }
 
           // Calculate cost using effective pricing for resellers
+          // Get vendorName from the last package if available
+          const lastPackage = foundPackages[foundPackages.length - 1];
+          const vendorName = lastPackage?.vendorName || '';
+          
           const orderCost = foundPackages.reduce((total, pkg) => {
-            return total + packageService.getEffectivePrice(pkg, (user as any)?.role || 'RETAILER');
+            return total + packageService.getEffectivePrice(pkg, user?.role || 'RETAILER', vendorName);
           }, 0);
           totalCost += orderCost;
-          
+
           allOrderResults.push({
             playerId,
             identifier,
@@ -273,16 +272,22 @@ ${foundPackages.length > 0 ? `✅ Found: ${foundPackages.map(p => p.vendorPackag
             orderLine
           });
         }
-        
+
+        // Get vendorName from the last package of the first order if available
+                let vendorName = '';
+                if (allOrderResults.length > 0 && allOrderResults[0].foundPackages.length > 0) {
+                  const lastPackage = allOrderResults[0].foundPackages[allOrderResults[0].foundPackages.length - 1];
+                  vendorName = lastPackage?.vendorName || '';
+                }
+                
+                const userBalance = await packageService.getUserBalanceWithVendor(vendorName, selectedRegion);
+
+          console.log(userBalance, totalCost);
+
         // Check total balance
         if (userBalance < totalCost) {
           return `❌ Insufficient balance for all orders!
-
-💰 Your balance: ${userBalance} XCN
-💎 Total cost: ${totalCost} XCN
-📉 Shortfall: ${totalCost - userBalance} XCN
-
-Orders to process: ${orderLines.length}`;
+          Orders to process: ${orderLines.length}`;
         }
 
         // Now create all orders
@@ -293,7 +298,7 @@ Orders to process: ${orderLines.length}`;
           try {
             // Create ONE order with multiple packages for this user
             const multiPackageOrderData = {
-              packageId: orderData.foundPackages.map(pkg=>pkg.id).join(','),
+              packageId: orderData.foundPackages.map(pkg => pkg.id).join(','),
               playerId: orderData.playerId,
               // packages: orderData.foundPackages.map(pkg => ({
               //   packageId: pkg.id,
@@ -303,7 +308,7 @@ Orders to process: ${orderLines.length}`;
               // playerId: orderData.playerId,
               identifier: orderData.identifier,
               gameName: gameName,
-              packageCode: orderData.foundPackages.map(pkg=>pkg.vendorPackageCode).join(','),
+              packageCode: orderData.foundPackages.map(pkg => pkg.vendorPackageCode).join(','),
               playerDetails: {
                 playerId: orderData.playerId,
                 identifier: orderData.identifier,
@@ -346,9 +351,9 @@ Orders to process: ${orderLines.length}`;
           }
         }
 
-        // Update balance
-        setCurrentBalance(newBalance);
-        
+        // Update balance by refreshing from server
+        // The newBalance variable represents the balance used for the transaction
+        // but we should refresh both balances from the server to ensure accuracy
         if (refreshBalance) {
           refreshBalance();
         }
@@ -360,50 +365,97 @@ Orders to process: ${orderLines.length}`;
         if (successfulOrders.length === orderLines.length) {
           // All successful
           let response = `✅ All ${orderLines.length} order(s) successful!\n\n`;
-          
+
           successfulOrders.forEach((order, index) => {
             response += `📋 Order ${index + 1}:\n`;
             response += `👤 Player: ${order.playerId} | ${order.identifier}\n`;
             response += `📦 Packages (${order.packages.length}):\n`;
+            // Get vendorName from the last package if available
+            const lastPackage = order.packages[order.packages.length - 1];
+            const vendorName = lastPackage?.vendorName || '';
+            
             order.packages.forEach(pkg => {
-              const pricingInfo = packageService.formatPricingDisplay(pkg, (user as any)?.role || 'RETAILER');
+              console.log(user, ' --- User in order response');
+              const pricingInfo = packageService.formatPricingDisplay(pkg, user?.role || 'RESELLER', vendorName);
+              const currency = pricingInfo.currency || 'XCN';
+              // Format the price to remove any leading zeros if it's a number that should be treated as integer
+              const formattedPrice = Number.isInteger(pricingInfo.price) ? pricingInfo.price : parseFloat(pricingInfo.price.toFixed(2));
               if (pricingInfo.isSpecialPricing) {
-                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${pricingInfo.price} ${pricingInfo.currency})\n`;
+                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${formattedPrice} ${currency})\n`;
               } else {
-                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${pricingInfo.price} XCN)\n`;
+                response += `   • ${pkg.vendorPackageCode} - ${pkg.name} (${formattedPrice} ${currency})\n`;
               }
             });
-            response += `💰 Cost: ${order.cost} XCN\n`;
+            // Get currency from the first package in the order
+            const firstPackage = order.packages[0];
+            const firstPackageVendorName = firstPackage?.vendorName || '';
+            const firstPackagePricingInfo = packageService.formatPricingDisplay(firstPackage, user?.role || 'RESELLER', firstPackageVendorName);
+            const orderCurrency = firstPackagePricingInfo.currency || 'XCN';
+            // Format the cost to remove any leading zeros if it's a number that should be treated as integer
+            const formattedCost = Number.isInteger(order.cost) ? order.cost : parseFloat(order.cost.toFixed(2));
+            response += `💰 Cost: ${formattedCost} ${orderCurrency}\n`;
             response += `🆔 Order ID: ${order.orderId}\n\n`;
           });
+
+          // Determine currency from first order's first package
+          let currency = 'XCN';
+          if (successfulOrders.length > 0 && successfulOrders[0].packages.length > 0) {
+            const firstPackage = successfulOrders[0].packages[0];
+            const firstPackageVendorName = firstPackage?.vendorName || '';
+            const firstPackagePricingInfo = packageService.formatPricingDisplay(firstPackage, user?.role || 'RESELLER', firstPackageVendorName);
+            currency = firstPackagePricingInfo.currency || 'XCN';
+          }
           
-          response += `💳 Total cost: ${totalCost} XCN\n`;
-          response += `💳 New balance: ${newBalance} XCN\n\n`;
+          // response += `💳 Total cost: ${totalCost} ${currency}\n`;
+          // response += `💳 New balance: ${newBalance} ${currency}\n\n`;
           response += `Need anything else? 🎮`;
-          
+
           return response;
 
         } else {
           // Some failed
           let response = `⚠️ ${successfulOrders.length}/${orderLines.length} orders successful!\n\n`;
-          
+
           if (successfulOrders.length > 0) {
             response += `✅ Successful orders:\n`;
             successfulOrders.forEach((order, index) => {
-              response += `• Player ${order.playerId}: ${order.packages.length} packages (${order.cost} XCN)\n`;
+              // Get currency from the first package in the order
+              const firstPackage = order.packages[0];
+              const firstPackageVendorName = firstPackage?.vendorName || '';
+              const firstPackagePricingInfo = packageService.formatPricingDisplay(firstPackage, user?.role || 'RESELLER', firstPackageVendorName);
+              const orderCurrency = firstPackagePricingInfo.currency || 'XCN';
+              // Format the cost to remove any leading zeros if it's a number that should be treated as integer
+              const formattedCost = Number.isInteger(order.cost) ? order.cost : parseFloat(order.cost.toFixed(2));
+              response += `• Player ${order.playerId}: ${order.packages.length} packages (${formattedCost} ${orderCurrency})\n`;
             });
             response += '\n';
           }
-          
+
           if (failedOrders.length > 0) {
             response += `❌ Failed orders:\n`;
             failedOrders.forEach((order, index) => {
               response += `• Player ${order.playerId}: ${order.error}\n`;
             });
           }
+
+          // Determine currency based on the first successful order if available, otherwise use first failed order
+          let currency = 'XCN';
+          if (successfulOrders.length > 0 && successfulOrders[0].packages.length > 0) {
+            const firstPackage = successfulOrders[0].packages[0];
+            const firstPackageVendorName = firstPackage?.vendorName || '';
+            const firstPackagePricingInfo = packageService.formatPricingDisplay(firstPackage, (user as any)?.role || 'RESELLER', firstPackageVendorName);
+            currency = firstPackagePricingInfo.currency || 'XCN';
+          } else if (failedOrders.length > 0 && failedOrders[0].packages.length > 0) {
+            const firstPackage = failedOrders[0].packages[0];
+            const firstPackageVendorName = firstPackage?.vendorName || '';
+            const firstPackagePricingInfo = packageService.formatPricingDisplay(firstPackage, (user as any)?.role || 'RESELLER', firstPackageVendorName);
+            currency = firstPackagePricingInfo.currency || 'XCN';
+          }
           
-          response += `\n💳 New balance: ${newBalance} XCN`;
-          
+          // Format the new balance to remove any leading zeros if it's a number that should be treated as integer
+          const formattedNewBalance = Number.isInteger(newBalance) ? newBalance : parseFloat(newBalance.toFixed(2));
+          response += `\n💳 New balance: ${formattedNewBalance} ${currency}`;
+
           return response;
         }
 
@@ -412,18 +464,18 @@ Orders to process: ${orderLines.length}`;
         return `❌ Order failed: ${error.message}`;
       }
     }
-    
+
     // Handle package inquiry using service
     if (input.includes('package') || input.includes('code') || input.includes('price')) {
       if (selectedGame) {
         try {
           const packages = await packageService.getPackagesByGame(selectedGame.name);
-          
+
           // Filter packages by selected region if one is selected
           const filteredPackages = selectedRegion
             ? packages.filter(pkg => pkg.region === selectedRegion)
             : packages;
-          
+
           if (filteredPackages.length > 0) {
             // Group by region/identifier if available
             const packagesByRegion = filteredPackages.reduce((acc: any, pkg: any) => {
@@ -432,9 +484,9 @@ Orders to process: ${orderLines.length}`;
               acc[region].push(pkg);
               return acc;
             }, {});
-            
+
             let response = `Available packages for ${selectedGame.name}:\n\n`;
-            
+
             // If a specific region is selected, only show packages for that region
             if (selectedRegion) {
               const regionPackages = packagesByRegion[selectedRegion] || [];
@@ -442,9 +494,9 @@ Orders to process: ${orderLines.length}`;
               regionPackages.slice(0, 10).forEach((pkg: any) => { // Show max 10 packages
                 const stockStatus = pkg.stock > 0 ? '✅' : '❌';
                 // Show dual pricing for resellers on Smile packages
-                if (pkg.vendor === 'Smile') {
+                if (pkg.vendorName === 'Smile') {
                   response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
-                  response += `   💰Reseller: ${pkg.vendorPrice || 0} Smile Coins\n`;
+                  response += `   💰Reseller: ${pkg.baseVendorCost || 0} Smile Coins\n`;
                 } else {
                   response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name} (${pkg.price} XCN)\n`;
                 }
@@ -456,7 +508,7 @@ Orders to process: ${orderLines.length}`;
                 pkgs.slice(0, 5).forEach((pkg: any) => { // Show max 5 per region
                   const stockStatus = pkg.stock > 0 ? '✅' : '❌';
                   // Show dual pricing for resellers on Smile packages
-                  if (pkg.vendor === 'Smile') {
+                  if (pkg.vendorName === 'Smile') {
                     response += `${stockStatus} ${pkg.resellKeyword} - ${pkg.name}\n`;
                     response += `   💰Reseller: ${pkg.vendorPrice || 0} Smile Coins\n`;
                   } else {
@@ -466,7 +518,7 @@ Orders to process: ${orderLines.length}`;
                 response += '\n';
               });
             }
-            
+
             response += `💰 Your balances:\n`;
             response += `   • XCN: ${currentBalance}\n`;
             response += `   • Smile Coins: ${regionSmileCoinBalance || smileCoinBalance}\n\n`;
@@ -477,19 +529,19 @@ Orders to process: ${orderLines.length}`;
         } catch (error) {
           console.error('Failed to fetch packages:', error);
         }
-        
+
         return `I'm having trouble fetching package information right now. Please try again later or contact support.`;
       } else {
         return `Please select a game first to see available packages. You can go to the games page to choose a game.`;
       }
     }
-    
+
     // Handle balance inquiry using service
     if (input.includes('balance') || input.includes('money') || input.includes('coin')) {
       try {
         const fetchedBalance = await packageService.getUserBalance();
         setCurrentBalance(fetchedBalance);
-        
+
         return `💰 Your current balance: ${fetchedBalance} XCN
 
 You can use your XCN to purchase game packages. Each package has a different cost.
@@ -502,17 +554,17 @@ Would you like to:
 How can I help you?`;
       } catch (error) {
         console.error('Failed to fetch balance:', error);
-        
+
         return `💰 Your current balance: ${currentBalance} XCN (cached)
 
 Having trouble fetching latest balance. Please try again.`;
       }
     }
-    
+
     // Handle help
     if (input.includes('help') || input.includes('how')) {
       const gameInfo = selectedGame ? `You've selected ${selectedGame.name}.` : 'Please select a game first.';
-      
+
       return `I'm here to help you purchase game diamonds! Here's how it works:
 
 ${gameInfo}
@@ -545,7 +597,7 @@ Paste multiple lines, each with player details
 
 Need help with anything specific?`;
     }
-    
+
     // Handle order status
     if (input.includes('status') || input.includes('order')) {
       return `To check your order status, please provide your Order ID.
@@ -557,13 +609,13 @@ Example: "1234566 12345 ML_86"
 
 💰 Your current balance: ${balance} XCN`;
     }
-    
+
     // Default response
     if (!input.includes('package') && !input.includes('balance') && !input.includes('status')) {
-      const gameContext = selectedGame 
-        ? `You've selected ${selectedGame.name}. ` 
+      const gameContext = selectedGame
+        ? `You've selected ${selectedGame.name}. `
         : 'Please select a game first from the games page. ';
-      
+
       return `${gameContext}To place an order, use one of these formats:
 
 📝 Single package:
@@ -619,7 +671,7 @@ What would you like to do? 🎮`;
                 </p>
               </div>
             </div>
-            
+
             {/* Game Selection Indicator */}
             {selectedGame && (
               <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
@@ -629,7 +681,7 @@ What would you like to do? 🎮`;
                     {selectedGame.name}
                   </span>
                 </div>
-                
+
                 {/* Region Selector */}
                 {availableRegions.length > 0 && (
                   <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-lg">
@@ -659,7 +711,7 @@ What would you like to do? 🎮`;
       <div className="flex-1 overflow-hidden">
         <div className="h-full max-w-4xl mx-auto px-4 py-6">
           <div className="h-full bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col">
-            
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map((message) => (
@@ -668,24 +720,22 @@ What would you like to do? 🎮`;
                   className={`flex ${message.type === 'outgoing' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.type === 'outgoing'
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.type === 'outgoing'
                         ? 'bg-blue-600 text-white'
                         : message.type === 'system'
-                        ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                    } ${message.isProcessing ? 'animate-pulse' : ''}`}
+                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-800'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                      } ${message.isProcessing ? 'animate-pulse' : ''}`}
                   >
                     <div className="whitespace-pre-wrap text-sm">
                       {message.content}
                     </div>
-                    <div className={`text-xs mt-1 ${
-                      message.type === 'outgoing' 
-                        ? 'text-blue-100' 
+                    <div className={`text-xs mt-1 ${message.type === 'outgoing'
+                        ? 'text-blue-100'
                         : message.type === 'system'
-                        ? 'text-yellow-600 dark:text-yellow-400'
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}>
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : 'text-gray-500 dark:text-gray-400'
+                      }`}>
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
@@ -722,7 +772,7 @@ What would you like to do? 🎮`;
                   )}
                 </button>
               </div>
-              
+
               {/* Quick Actions */}
               <div className="flex flex-wrap gap-2 mt-3">
                 <button

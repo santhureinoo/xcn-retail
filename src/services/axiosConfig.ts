@@ -1,7 +1,7 @@
 import axios from 'axios';
 import authService from './authService';
 
-const API_URL = 'https://digital-asset-be-835786625763.us-central1.run.app';
+const API_URL = 'http://localhost:8080';
 
 const axiosInstance = axios.create({
   baseURL: API_URL,

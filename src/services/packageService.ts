@@ -15,6 +15,7 @@ export interface Package {
   region: string;
   gameName: string;
   vendor: string;
+  vendorName?: string;
   appliedMarkup?: MarkUp;
   vendorPackageCode: string;
   vendorPrice: number;
@@ -205,6 +206,7 @@ export class PackageService {
     try {
       const response = await axiosInstance.get(`/packages?gameName=${encodeURIComponent(gameName)}&limit=1000`);
       const packages: Package[] = (response.data.packages as Package[]).map((pkg: Package) => {
+        // The backend now includes vendorName in the response, so we don't need to modify it here
         if(pkg.appliedMarkup) {
           if(pkg.appliedMarkup.flatAmountAdd) {
             pkg.price = pkg.price + pkg.appliedMarkup.flatAmountAdd;
@@ -227,7 +229,11 @@ export class PackageService {
   // Get regions for a specific game using the new endpoint
   static async getRegionsForGame(gameName: string): Promise<string[]> {
     try {
-      const response = await axiosInstance.get(`/packages/regions/${encodeURIComponent(gameName)}`);
+      const response = await axiosInstance.get(`/regions/by-game/${encodeURIComponent(gameName)}`);
+      // Extract regions from the new format which includes vendor information
+      if (response.data.regions && Array.isArray(response.data.regions)) {
+        return response.data.regions.map((region: any) => region.region || region).filter(Boolean);
+      }
       return response.data.regions || [];
     } catch (error: any) {
       console.error('Error fetching regions for game:', error);
@@ -289,34 +295,40 @@ export class PackageService {
   }
 
   // Get package price based on user role and vendor
-  static getEffectivePrice(pkg: Package, userRole: string): number {
-    if (userRole === 'RESELLER' && pkg.vendor === 'Smile') {
-      return pkg.baseVendorCost || 0;
+    static getEffectivePrice(pkg: Package, userRole: string, vendorName?: string): number {
+      // If vendorName is provided, use it for the check, otherwise use pkg.vendorName
+      const effectiveVendorName = vendorName || pkg.vendorName;
+      
+      if ((userRole === 'reseller' || userRole === 'RESELLER') && effectiveVendorName === 'Smile') {
+        console.log('Applying Smile reseller pricing for package:', pkg.name);
+        return Number(pkg.baseVendorCost) || 0;
+      }
+      return Number(pkg.price);
     }
-    return pkg.price;
-  }
 
   // Check if special pricing applies
-  static isSpecialPricing(pkg: Package, userRole: string): boolean {
-    return userRole === 'RESELLER' && pkg.vendor === 'Smile';
-  }
+    static isSpecialPricing(pkg: Package, userRole: string, vendorName?: string): boolean {
+      // If vendorName is provided, use it for the check, otherwise use pkg.vendorName
+      const effectiveVendorName = vendorName || pkg.vendorName;
+      return (userRole === 'reseller' || userRole === 'RESELLER') && effectiveVendorName === 'Smile';
+    }
 
   // Format pricing display for resellers
-  static formatPricingDisplay(pkg: Package, userRole: string): {
-    price: number;
-    originalPrice?: number;
-    isSpecialPricing: boolean;
-    currency: string;
-  } {
-    const isSpecial = this.isSpecialPricing(pkg, userRole);
-    
-    return {
-      price: this.getEffectivePrice(pkg, userRole),
-      originalPrice: isSpecial ? pkg.price : undefined,
-      isSpecialPricing: isSpecial,
-      currency: isSpecial ? 'Smile Coins' : 'XCN'
-    };
-  }
+    static formatPricingDisplay(pkg: Package, userRole: string, vendorName?: string): {
+      price: number;
+      originalPrice?: number;
+      isSpecialPricing: boolean;
+      currency: string;
+    } {
+      const isSpecial = this.isSpecialPricing(pkg, userRole, vendorName);
+      
+      return {
+        price: this.getEffectivePrice(pkg, userRole, vendorName),
+        originalPrice: isSpecial ? Number(pkg.price) : undefined,
+        isSpecialPricing: isSpecial,
+        currency: isSpecial ? 'Smile Coins' : 'XCN'
+      };
+    }
 
   // Create multi-package order
   static async createMultiPackageOrder(orderData: any): Promise<any> {
@@ -545,15 +557,41 @@ export class PackageService {
   }
 
   // Get user balance (ORIGINAL METHOD)
-  static async getUserBalance(): Promise<number> {
-    try {
-      const response = await axiosInstance.get('/users/balance');
-      return response.data.balance || 0;
-    } catch (error: any) {
-      console.error('Failed to fetch user balance:', error);
-      throw new Error(error.response?.data?.message || 'Failed to fetch user balance');
+    static async getUserBalance(): Promise<number> {
+      try {
+        const response = await axiosInstance.get('/users/balance');
+        return response.data.balance || 0;
+      } catch (error: any) {
+        console.error('Failed to fetch user balance:', error);
+        throw new Error(error.response?.data?.message || 'Failed to fetch user balance');
+      }
     }
-  }
+  
+    // Get user balance with vendor and region support
+    static async getUserBalanceWithVendor(vendorName?: string, selectedRegion?: string): Promise<number> {
+      try {
+        const response = await axiosInstance.get('/users/balance');
+        
+        // If vendorName is 'Smile' and we have a selectedRegion, check for Smile coin balances
+        if (vendorName === 'Smile' && selectedRegion && response.data.smileCoinBalances) {
+          // Look for the balance matching the selected region
+          const regionBalance = response.data.smileCoinBalances.find((balance: any) =>
+            balance.region === selectedRegion
+          );
+          
+          // If we found a balance for the region, return it; otherwise return 0
+          if (regionBalance) {
+            return regionBalance.balance || 0;
+          }
+        }
+        
+        // Default to regular balance
+        return response.data.balance || 0;
+      } catch (error: any) {
+        console.error('Failed to fetch user balance:', error);
+        throw new Error(error.response?.data?.message || 'Failed to fetch user balance');
+      }
+    }
 
   // Get smile coin balance by region
   static async getSmileCoinBalanceByRegion(region: string): Promise<number> {

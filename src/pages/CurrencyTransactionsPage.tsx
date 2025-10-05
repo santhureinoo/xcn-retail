@@ -9,8 +9,10 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 
 const CurrencyTransactionsPage: React.FC = () => {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = React.useState<'currency' | 'smile'>('currency');
+  
   const { transactions, loading, error, hasMore, loadMore } = useTransactionList<CurrencyTransaction>({
-    type: 'currency',
+    type: activeTab,
     limit: 15
   });
   
@@ -42,8 +44,19 @@ const CurrencyTransactionsPage: React.FC = () => {
       )
     },
     {
+      key: 'transactionId',
+      header: t('transaction.id', 'Transaction ID'),
+      render: (transaction) => (
+        <span className="text-sm font-mono text-gray-900 dark:text-gray-100">
+          {transaction.id.substring(0, 8)}...
+        </span>
+      )
+    },
+    {
       key: 'amount',
-      header: t('transaction.amount', 'Amount'),
+      header: activeTab === 'smile'
+        ? t('transaction.smileAmount', 'Smile Coins')
+        : t('transaction.xcoinAmount', 'xCoin Amount'),
       render: (transaction) => (
         <div className="flex items-center">
           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -53,23 +66,16 @@ const CurrencyTransactionsPage: React.FC = () => {
       )
     },
     {
-      key: 'price',
-      header: t('transaction.price', 'Price'),
+      key: 'description',
+      header: activeTab === 'smile'
+        ? t('transaction.smileDescription', 'Smile Transaction')
+        : t('transaction.xcoinDescription', 'xCoin Transaction'),
       render: (transaction) => (
         <span className="text-sm text-gray-900 dark:text-gray-100">
-          ${transaction.price.toFixed(2)}
+          {transaction.command}
         </span>
       )
     },
-    // {
-    //   key: 'paymentMethod',
-    //   header: t('transaction.paymentMethod', 'Payment Method'),
-    //   render: (transaction) => (
-    //     <span className="text-sm text-gray-600 dark:text-gray-400">
-    //       {transaction.paymentMethod}
-    //     </span>
-    //   )
-    // },
     {
       key: 'status',
       header: t('transaction.status', 'Status'),
@@ -82,7 +88,7 @@ const CurrencyTransactionsPage: React.FC = () => {
       header: t('common.actions', 'Actions'),
       render: (transaction) => (
         <Link
-          to={`/transactions/${transaction.id}`}
+          to={`/transaction-details/${transaction.id}`}
           className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
         >
           {t('common.viewDetails', 'View Details')}
@@ -103,7 +109,9 @@ const CurrencyTransactionsPage: React.FC = () => {
       <header className="bg-white dark:bg-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {t('currencyTransactions.title', 'Currency Transactions')}
+            {activeTab === 'smile'
+              ? t('currencyTransactions.smileTitle', 'Smile Coin Transactions')
+              : t('currencyTransactions.xcoinTitle', 'xCoin Transactions')}
           </h1>
           <div className="flex space-x-4">
             <Link 
@@ -122,6 +130,34 @@ const CurrencyTransactionsPage: React.FC = () => {
         </div>
       </header>
       
+      {/* Tabs */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('currency')}
+              className={`${
+                activeTab === 'currency'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-40'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              {t('currencyTransactions.xcoinTab', 'xCoin Transactions')}
+            </button>
+            <button
+              onClick={() => setActiveTab('smile')}
+              className={`${
+                activeTab === 'smile'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              {t('currencyTransactions.smileTab', 'Smile Coin Transactions')}
+            </button>
+          </nav>
+        </div>
+      </div>
+      
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Transaction summary cards */}
@@ -136,7 +172,7 @@ const CurrencyTransactionsPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {t('currencyTransactions.totalDiamonds', 'Total Diamonds')}
+                  {activeTab === 'smile' ? t('currencyTransactions.totalSmile', 'Total Smile Coins') : t('currencyTransactions.totalXCoin', 'Total xCoin')}
                 </p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {transactions.reduce((sum, tx) => sum + (tx.status === 'completed' ? tx.amount : 0), 0)}
@@ -195,10 +231,14 @@ const CurrencyTransactionsPage: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-              {t('currencyTransactions.recentTransactions', 'Recent Transactions')}
+              {activeTab === 'smile'
+                ? t('currencyTransactions.recentSmileTransactions', 'Recent Smile Coin Transactions')
+                : t('currencyTransactions.recentXcoinTransactions', 'Recent xCoin Transactions')}
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-              {t('currencyTransactions.description', 'Your recent diamond purchase history.')}
+              {activeTab === 'smile'
+                ? t('currencyTransactions.smileDescription', 'Your recent Smile Coin transaction history.')
+                : t('currencyTransactions.xcoinDescription', 'Your recent xCoin transaction history.')}
             </p>
           </div>
           
@@ -207,7 +247,9 @@ const CurrencyTransactionsPage: React.FC = () => {
             data={transactions}
             keyExtractor={(item) => item.id}
             isLoading={loading && transactions.length === 0}
-            emptyMessage={t('currencyTransactions.noTransactions', 'No currency transactions found.')}
+            emptyMessage={activeTab === 'smile'
+              ? t('currencyTransactions.noSmileTransactions', 'No Smile Coin transactions found.')
+              : t('currencyTransactions.noXcoinTransactions', 'No xCoin transactions found.')}
             onRowClick={handleViewTransaction}
           />
           

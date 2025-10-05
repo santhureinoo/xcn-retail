@@ -6,6 +6,9 @@ interface User {
   email: string;
   firstName: string;
   lastName: string;
+  role: string;
+  balance?: number;
+  isVerified?: boolean;
 }
 
 interface AuthState {

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Define the base API URL
-const BASE_API_URL ='https://digital-asset-be-835786625763.us-central1.run.app';
+const BASE_API_URL ='http://localhost:8080';
 
 // Define types for the auth responses
 export interface User {
@@ -123,12 +123,14 @@ const authService = {
   // Logout user
   logout: () => {
     localStorage.removeItem('user');
-    window.location.href = '/';
+    // Redirect to login page after logout
+    window.location.href = '/login';
   },
 
   // Get current user data from localStorage
   getCurrentUser: (): AuthResponse | null => {
     const userStr = localStorage.getItem('user');
+    console.log('Getting current user from localStorage:', userStr);
     if (userStr) return JSON.parse(userStr);
     return null;
   },

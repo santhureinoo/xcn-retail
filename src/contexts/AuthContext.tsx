@@ -63,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     authService.logout();
     setUser(null);
+    // Navigation should be handled by the component that calls logout
   };
 
   const forgotPassword = async (email: string) => {
